@@ -1,0 +1,3 @@
+sample_id,group,age,sex,vitamin_d,homocysteine,iron,tsh,total_cholesterol,triglycerides,hdl,ldl,calprotectin,lactoferrin,gi_symptoms,asd_severity,diet_type
+SAMPLE001,ASD,6,M,25.3,12.1,80,2.5,180,90,55,100,150,8.2,moderate,severe,regular
+SAMPLE002,neurotypical,7,F,35.0,8.5,95,2.1,170,75,60,90,45,3.1,none,,regular

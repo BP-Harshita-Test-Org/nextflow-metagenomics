@@ -1,0 +1,666 @@
+================================================================================
+  WGS METAGENOMICS PIPELINE — FLOW DIAGRAM & MODULE I/O REFERENCE
+================================================================================
+
+
+================================================================================
+VARIANT 1: TAXONOMY-ONLY RUN
+================================================================================
+
+  Command:
+    nextflow run main.nf \
+        --skip_basecalling --input_fastq reads.fq.gz \
+        --kraken2_db /path/to/db/ --host_reference GRCh38.fa \
+        --skip_functional --skip_diversity --skip_lefse \
+        --skip_maaslin2 --skip_visualization
+
+  Processes: 6
+  Estimated time: 30-60 min per sample
+
+  Flow:
+  ─────
+
+  reads.fq.gz
+       │
+       ├────────────────────────────────┐
+       │                                │
+       ▼                                ▼
+  ┌──────────────┐               ┌──────────────┐
+  │  1. NANOPLOT  │               │  2. CHOPPER   │
+  │     QC        │               │    FILTER     │
+  └──────┬───────┘               └──────┬────────┘
+         │                              │
+         ▼                              ▼
+    QC reports                    filtered.fastq
+    (terminal)                          │
+                                        ▼
+                                 ┌──────────────────┐
+                                 │  3. MINIMAP2      │
+                                 │  HOST REMOVAL     │
+                                 └──────┬───────────┘
+                                        │
+                                        ▼
+                                  nonhost.fastq
+                                        │
+                                        ▼
+                                 ┌──────────────────┐
+                                 │  4. KRAKEN2       │
+                                 │  CLASSIFY         │
+                                 └──────┬───────────┘
+                                        │
+                              ┌─────────┴─────────┐
+                              │                    │
+                              ▼                    ▼
+                       ┌─────────────┐     ┌─────────────┐
+                       │ 5. BRACKEN  │     │  6. KRONA   │
+                       │ ABUNDANCE   │     │  PLOT       │
+                       └─────────────┘     └─────────────┘
+                              │                    │
+                              ▼                    ▼
+                      species_abundance      krona.html
+                         table (.tsv)       (interactive)
+
+
+  Module I/O Detail:
+  ──────────────────
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 1. NANOPLOT_QC                                                      │
+  │                                                                     │
+  │ Container: staphb/nanoplot:latest                                   │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name for labeling         │
+  │   - fastq              (file)      Raw input FASTQ.gz               │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - report_dir         (dir)       {sample}_nanoplot/               │
+  │     Contains:                                                       │
+  │       NanoStats.txt               Read count, mean quality, N50     │
+  │       LengthvsQualityScatterPlot  Quality vs read length scatter    │
+  │       Non_weightedHistogram       Read length distribution          │
+  │       WeightedHistogram           Weighted read length distribution │
+  │       Yield_By_Length             Cumulative yield by length        │
+  │   - stats              (file)      NanoStats.txt                    │
+  │                                                                     │
+  │ Saved to: results/01_qc/nanoplot/                                   │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 2. CHOPPER_FILTER                                                   │
+  │                                                                     │
+  │ Container: quay.io/biocontainers/chopper:0.9.0                      │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - fastq              (file)      Raw input FASTQ.gz               │
+  │                                                                     │
+  │ PARAMS:                                                             │
+  │   - min_quality         (int)      Default: 10                      │
+  │   - min_length          (int)      Default: 500 bp                  │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - fastq              (file)      {sample}_filtered.fastq          │
+  │     Reads below quality or length thresholds are removed.           │
+  │                                                                     │
+  │ Not published (intermediate file, passed to next step)              │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 3. MINIMAP2_HOST_REMOVAL                                            │
+  │                                                                     │
+  │ Container: staphb/minimap2:latest                                   │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - fastq              (file)      Filtered FASTQ from Chopper      │
+  │   - host_ref           (file)      GRCh38.fa human reference genome │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - fastq              (file)      {sample}_nonhost.fastq           │
+  │     Only reads that did NOT align to human genome.                  │
+  │   - stats              (file)      {sample}_host_stats.txt          │
+  │     Contains: total_reads, host_reads, nonhost_reads,               │
+  │               host_fraction                                         │
+  │                                                                     │
+  │ Saved to: results/02_host_removal/ (stats only)                     │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 4. KRAKEN2_CLASSIFY                                                 │
+  │                                                                     │
+  │ Container: staphb/kraken2:latest                                    │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - fastq              (file)      Non-host FASTQ from Minimap2     │
+  │   - kraken2_db         (dir)       Kraken2 database directory       │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - output             (file)      {sample}_kraken2_output.txt      │
+  │     Per-read classification. Each line:                             │
+  │       C/U  read_id  taxon_id  length  LCA_mapping                  │
+  │   - report             (file)      {sample}_kraken2_report.txt      │
+  │     Summary per taxon. Each line:                                   │
+  │       %reads  #reads_clade  #reads_direct  rank  taxid  name       │
+  │                                                                     │
+  │ Saved to: results/03_taxonomy/kraken2/                              │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 5. BRACKEN_ABUNDANCE                                                │
+  │                                                                     │
+  │ Container: staphb/bracken:latest                                    │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - kraken2_report     (file)      Kraken2 report from step 4       │
+  │   - kraken2_db         (dir)       Same Kraken2 database directory  │
+  │                                                                     │
+  │ PARAMS:                                                             │
+  │   - bracken_read_length (int)      Default: 250 (pre-built DBs have  │
+  │                                   100/150/200/250/300 bp only)      │
+  │   - bracken_level       (char)     Default: S (species)             │
+  │   - bracken_threshold   (int)      Default: 10 reads minimum        │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - abundance          (file)      {sample}_bracken_species.tsv     │
+  │     Columns:                                                        │
+  │       name                  Species name                            │
+  │       taxonomy_id           NCBI taxonomy ID                        │
+  │       taxonomy_lvl          Rank (S=species)                        │
+  │       kraken_assigned_reads Raw Kraken2 count                       │
+  │       added_reads           Reads redistributed by Bracken          │
+  │       new_est_reads         Final estimated read count              │
+  │       fraction_total_reads  Relative abundance (0.0 - 1.0)         │
+  │   - report             (file)      {sample}_bracken_report.txt      │
+  │     Same format as Kraken2 report but with corrected counts.        │
+  │                                                                     │
+  │ Saved to: results/03_taxonomy/bracken/                              │
+  │                                                                     │
+  │ >>> THIS IS THE PRIMARY OUTPUT OF THE TAXONOMY-ONLY RUN <<<         │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 6. KRONA_PLOT                                                       │
+  │                                                                     │
+  │ Container: nanozoo/krona:2.7.1                                      │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - kraken2_report     (file)      Kraken2 report from step 4       │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - html               (file)      {sample}_krona.html              │
+  │     Interactive zoomable pie chart. Open in any browser.            │
+  │     Shows taxonomy hierarchy from phylum → species.                 │
+  │     Click to drill down into any clade.                             │
+  │                                                                     │
+  │ Saved to: results/03_taxonomy/krona/                                │
+  └──────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+VARIANT 2: TAXONOMY + FUNCTIONAL RUN
+================================================================================
+
+  Command:
+    nextflow run main.nf \
+        --skip_basecalling --input_fastq reads.fq.gz \
+        --kraken2_db /path/to/db/ --host_reference GRCh38.fa \
+        --eggnog_db /path/to/eggnog/ \
+        --skip_diversity --skip_lefse --skip_maaslin2 --skip_visualization
+
+  Processes: 9  (taxonomy-only 6 + 3 new)
+  Estimated time: 1-3 hours per sample
+
+  Flow:
+  ─────
+  Everything from Variant 1, PLUS a parallel branch after host removal:
+
+  reads.fq.gz
+       │
+       ├──────────────────────────────────┐
+       │                                  │
+       ▼                                  ▼
+  ┌──────────┐                     ┌──────────────┐
+  │ 1. NANO  │                     │  2. CHOPPER   │
+  │   PLOT   │                     │    FILTER     │
+  └──────────┘                     └──────┬────────┘
+                                          │
+                                          ▼
+                                   ┌──────────────────┐
+                                   │  3. MINIMAP2      │
+                                   │  HOST REMOVAL     │
+                                   └──────┬───────────┘
+                                          │
+                                   nonhost.fastq
+                                          │
+                          ┌───────────────┴───────────────┐
+                          │                               │
+                          ▼                               ▼
+                   ┌──────────────┐               ┌──────────────────┐
+                   │  4. KRAKEN2  │               │  7. PRODIGAL     │
+                   │  CLASSIFY    │               │  GENE PREDICTION │
+                   └──────┬──────┘               └──────┬───────────┘
+                          │                              │
+                    ┌─────┴─────┐                        ▼
+                    │           │                  proteins.faa
+                    ▼           ▼                         │
+              ┌─────────┐ ┌─────────┐                    ▼
+              │5.BRACKEN│ │6. KRONA │             ┌──────────────────┐
+              └─────────┘ └─────────┘             │  8. EGGNOG       │
+                    │           │                  │  MAPPER          │
+                    ▼           ▼                  └──────┬───────────┘
+               species     krona.html                     │
+              abundance                            annotations.tsv
+                table                              (KEGG, COG, GO)
+                                                          │
+                                                          ▼
+                                                  ┌──────────────────┐
+                                                  │  9. EGGNOG →     │
+                                                  │  PATHWAY MATRIX  │
+                                                  └──────┬───────────┘
+                                                         │
+                                                         ▼
+                                                  pathway_abundance.tsv
+                                                  (pathway × rel_abund)
+
+
+  NEW Module I/O Detail (steps 1-6 same as Variant 1):
+  ─────────────────────────────────────────────────────
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 7. PRODIGAL_PREDICT                                                 │
+  │                                                                     │
+  │ Container: biocontainers/prodigal:v2.6.3                            │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - fastq              (file)      Non-host FASTQ from Minimap2     │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - proteins           (file)      {sample}_proteins.faa            │
+  │     Predicted protein sequences in FASTA format.                    │
+  │     Each entry: >gene_id # start # end # strand # metadata         │
+  │     Followed by amino acid sequence.                                │
+  │   - gff                (file)      {sample}_genes.gff               │
+  │     Gene coordinates in GFF3 format.                                │
+  │     Columns: seqid, source, type, start, end, score, strand,       │
+  │              phase, attributes                                      │
+  │   - nucleotides        (file)      {sample}_genes.fna               │
+  │     Gene nucleotide sequences in FASTA format.                      │
+  │                                                                     │
+  │ Saved to: results/04_functional/prodigal/                           │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 8. EGGNOG_ANNOTATE                                                  │
+  │                                                                     │
+  │ Container: nanozoo/eggnog-mapper:2.1.12                             │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - proteins           (file)      Protein FASTA from Prodigal      │
+  │   - eggnog_db          (dir)       eggNOG database directory (~45GB)│
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - annotations        (file)      {sample}_eggnog.emapper.annotations
+  │     Tab-separated. Key columns:                                     │
+  │       query             Gene ID from Prodigal                       │
+  │       seed_ortholog     Best hit in eggNOG database                 │
+  │       evalue            E-value of the hit                          │
+  │       KEGG_ko           KEGG ortholog IDs (e.g., K00001)            │
+  │       KEGG_Pathway      KEGG pathway IDs (e.g., map00010)           │
+  │       KEGG_Module       KEGG module IDs                             │
+  │       COG_category      COG functional category (e.g., C=Energy)    │
+  │       GOs               Gene Ontology terms                         │
+  │       EC                Enzyme Commission numbers                   │
+  │       KEGG_Reaction     KEGG reaction IDs                           │
+  │       CAZy              Carbohydrate-active enzyme families         │
+  │       PFAMs             Protein family domains                      │
+  │   - orthologs          (file)      {sample}_eggnog.emapper.seed_orthologs
+  │     Best ortholog hits from DIAMOND alignment.                      │
+  │                                                                     │
+  │ Saved to: results/04_functional/eggnog/                             │
+  │                                                                     │
+  │ Study-relevant pathways to look for in KEGG_Pathway column:         │
+  │   - map00670  Folate/one-carbon metabolism (→ homocysteine)         │
+  │   - map00380  Tryptophan metabolism (→ serotonin, ASD relevance)    │
+  │   - map00650  Butyrate metabolism (→ SCFA, GI symptoms)             │
+  │   - map00640  Propanoate metabolism (→ SCFA production)             │
+  │   - map00750  Vitamin B6 metabolism                                 │
+  │   - map00770  Vitamin B12 / Folate biosynthesis                     │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 9. EGGNOG_TO_PATHWAY_MATRIX                          [NEW — Fix #4] │
+  │                                                                     │
+  │ Container: python:3.11-slim                                         │
+  │ Script:    bin/eggnog_to_pathway_matrix.py                          │
+  │                                                                     │
+  │ WHY THIS STEP EXISTS:                                               │
+  │   eggNOG output has gene-level rows with dozens of columns          │
+  │   (query, seed_ortholog, KEGG_ko, KEGG_Pathway, COG, GOs, etc.).   │
+  │   LEfSe expects a pathway × abundance table (same structure as      │
+  │   Bracken output). This step converts between the two formats.      │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id     (string)   Sample name                           │
+  │   - annotations   (file)     *.emapper.annotations from step 8     │
+  │                                                                     │
+  │ PROCESSING:                                                         │
+  │   1. Reads KEGG_Pathway column from eggNOG output                  │
+  │   2. Expands comma-separated pathway IDs (e.g. map00010,map00020)  │
+  │   3. Counts genes per pathway                                       │
+  │   4. Computes relative abundance = genes_in_pathway / total_genes  │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - pathway_abundance (file)  {sample}_pathway_abundance.tsv       │
+  │     Columns (deliberately match Bracken format):                    │
+  │       name                  KEGG pathway ID (e.g. map00010)        │
+  │       count                 Number of genes assigned to pathway     │
+  │       fraction_total_reads  Relative abundance (0.0 - 1.0)        │
+  │                                                                     │
+  │ Not saved to results (intermediate, consumed by LEfSe pathways)     │
+  └──────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+VARIANT 3: FULL ANALYSIS RUN
+================================================================================
+
+  Command:
+    nextflow run main.nf \
+        --skip_basecalling --input_fastq reads.fq.gz \
+        --metadata metadata.csv \
+        --kraken2_db /path/to/db/ --host_reference GRCh38.fa \
+        --eggnog_db /path/to/eggnog/
+
+  Processes: 14  (taxonomy 6 + functional 3 + analysis 5)
+  Estimated time: 2-6 hours per sample
+
+  Flow:
+  ─────
+
+  reads.fq.gz
+       │
+       ├───────────────────────────────────┐
+       │                                   │
+       ▼                                   ▼
+  ┌──────────┐                      ┌──────────────┐
+  │ 1. NANO  │                      │  2. CHOPPER   │
+  │   PLOT   │                      │    FILTER     │
+  └──────────┘                      └──────┬────────┘
+                                           │
+                                           ▼
+                                    ┌──────────────────┐
+                                    │  3. MINIMAP2      │
+                                    │  HOST REMOVAL     │
+                                    └──────┬───────────┘
+                                           │
+                                    nonhost.fastq
+                                           │
+                           ┌───────────────┴───────────────┐
+                           │                               │
+                           ▼                               ▼
+                    ┌──────────────┐               ┌──────────────────┐
+                    │  4. KRAKEN2  │               │  7. PRODIGAL     │
+                    │  CLASSIFY    │               │  GENE PREDICTION │
+                    └──────┬──────┘               └──────┬───────────┘
+                           │                              │
+                     ┌─────┴─────┐                        ▼
+                     │           │                  proteins.faa
+                     ▼           ▼                         │
+               ┌─────────┐ ┌─────────┐                    ▼
+               │5.BRACKEN│ │6. KRONA │             ┌──────────────────┐
+               └────┬────┘ └─────────┘             │  8. EGGNOG       │
+                    │                               │  MAPPER          │
+                    ▼                               └──────┬───────────┘
+             species_abundance                             │
+                  (.tsv)                            annotations.tsv
+                    │                                      │
+                    │                                      ▼
+                    │                               ┌──────────────────┐
+                    │                               │  9. EGGNOG →     │
+                    │                               │  PATHWAY MATRIX  │
+                    │                               └──────┬───────────┘
+                    │                                      │
+                    │                               pathway_abundance.tsv
+                    │                                      │
+                    │     ┌────────────────────────────┐   │
+                    │     │       metadata.csv          │   │
+                    │     │    (sample + biomarker      │   │
+                    │     │         data)               │   │
+                    │     └──────┬──────────────────────┘   │
+                    │            │                          │
+          ┌─────────┼────────────┼──────────┬──────────────┘
+          │         │            │          │
+          ▼         ▼            ▼          ▼
+    ┌──────────┐  ┌──────────┐  ┌──────────────────────┐
+    │10.DIVERS │  │11.LEfSe  │  │12.LEfSe              │
+    │   ITY    │  │  (taxa)  │  │  (pathways)          │
+    └────┬─────┘  └────┬─────┘  └──────────┬───────────┘
+         │             │                   │
+         │    ┌────────┴───────────────────┘
+         │    │
+         │    │    ┌──────────────────┐
+         │    │    │  13. MAASLIN2    │  ◄── species_abundance + metadata
+         │    │    │  CORRELATION     │
+         │    │    └──────┬───────────┘
+         │    │           │
+         ▼    ▼           ▼
+    ┌────────────────────────────────────┐
+    │  14. VISUALIZATION                 │
+    │  (ggplot2 + ComplexHeatmap)        │
+    └────────────────────────────────────┘
+                    │
+                    ▼
+           publication figures
+
+
+  NEW Module I/O Detail (steps 1-8 same as Variants 1 & 2):
+  ──────────────────────────────────────────────────────────
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 9. EGGNOG_TO_PATHWAY_MATRIX                          [NEW — Fix #4] │
+  │    (see full I/O detail in Variant 2 section above)                 │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 10. DIVERSITY_ANALYSIS                                               │
+  │                                                                     │
+  │ Container: bio-r-metagenomics:1.0.0 (custom build)                  │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - bracken_abundance  (file)      Bracken species TSV from step 5  │
+  │   - metadata           (file)      Sample metadata CSV              │
+  │                                                                     │
+  │ PARAMS:                                                             │
+  │   - fdr_alpha           (float)    Default: 0.05                    │
+  │   - fdr_ancombc         (float)    Default: 0.2                     │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - results            (dir)       {sample}_diversity_results/      │
+  │     Contains:                                                       │
+  │       alpha_diversity.csv          Shannon, Simpson, observed spp   │
+  │       abundance_for_beta_diversity.csv   For multi-sample PCoA      │
+  │       top20_species.csv            Top 20 species by abundance      │
+  │       top20_species_barplot.pdf    Bar chart of dominant species     │
+  │                                                                     │
+  │     With multi-sample cohort (future):                              │
+  │       beta_diversity_bray_curtis.csv   Bray-Curtis distance matrix  │
+  │       beta_diversity_jaccard.csv       Jaccard distance matrix      │
+  │       pcoa_plot.pdf                    PCoA ordination plot          │
+  │       permanova_results.csv            PERMANOVA test results       │
+  │       ancombc_results.csv              Differentially abundant spp  │
+  │                                                                     │
+  │ Saved to: results/05_diversity/                                     │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 11. LEFSE_ANALYSIS (taxa)                                           │
+  │                                                                     │
+  │ Container: biobakery/lefse:latest                                   │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - abundance_table    (file)      Bracken species TSV from step 5  │
+  │   - metadata           (file)      Sample metadata CSV              │
+  │   - analysis_type      (string)    "taxa"                           │
+  │                                                                     │
+  │ PARAMS:                                                             │
+  │   - lda_threshold       (float)    Default: 2.0                     │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - results            (file)      {sample}_lefse_taxa_results.tsv  │
+  │     Columns:                                                        │
+  │       feature_name      Species or taxon name                       │
+  │       log_highest_avg   Log of highest class mean                   │
+  │       class             Which group is enriched (ASD/neurotypical)  │
+  │       LDA_score         Effect size (higher = more discriminant)    │
+  │       p_value           Statistical significance                    │
+  │   - plot               (file)      {sample}_lefse_taxa_plot.pdf     │
+  │     Horizontal bar chart showing discriminant taxa per group.       │
+  │                                                                     │
+  │ Saved to: results/06_lefse/                                         │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 12. LEFSE_ANALYSIS (pathways)                                       │
+  │                                                                     │
+  │ Container: biobakery/lefse:latest                                   │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - abundance_table    (file)      pathway_abundance.tsv from step 9│
+  │                        [FIXED — was incorrectly eggNOG annotations] │
+  │   - metadata           (file)      Sample metadata CSV              │
+  │   - analysis_type      (string)    "pathways"                       │
+  │                                                                     │
+  │ PARAMS:                                                             │
+  │   - lda_threshold       (float)    Default: 2.0                     │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - results            (file)      {sample}_lefse_pathways_results.tsv
+  │     Same format as taxa LEfSe but for KEGG pathways/COG categories. │
+  │   - plot               (file)      {sample}_lefse_pathways_plot.pdf │
+  │     Bar chart of discriminant pathways per group.                   │
+  │                                                                     │
+  │ Saved to: results/06_lefse/                                         │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 13. MAASLIN2_ANALYSIS                                               │
+  │                                                                     │
+  │ Container: bio-r-metagenomics:1.0.0 (custom build)                  │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - bracken_abundance  (file)      Bracken species TSV from step 5  │
+  │   - metadata           (file)      Sample metadata CSV              │
+  │                                                                     │
+  │ PARAMS:                                                             │
+  │   - fixed_effects       (string)   Default: "diagnosis,age,sex"     │
+  │   - reference_level     (string)   Default: "neurotypical"          │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - results            (dir)       {sample}_maaslin2_results/       │
+  │     Contains:                                                       │
+  │       all_results.tsv              Full regression output            │
+  │         Columns:                                                    │
+  │           feature       Species name                                │
+  │           metadata      Biomarker variable tested                   │
+  │           value         Variable level                              │
+  │           coef          Regression coefficient                      │
+  │           stderr        Standard error                              │
+  │           N             Sample count                                │
+  │           N.not.zero    Non-zero feature count                      │
+  │           pval          Raw p-value                                 │
+  │           qval          FDR-adjusted q-value                        │
+  │       significant_results.tsv      Only q-value < 0.25             │
+  │       figures/                     Per-association scatter plots     │
+  │         {feature}_vs_{biomarker}.pdf                                │
+  │                                                                     │
+  │ Saved to: results/07_maaslin2/                                      │
+  │                                                                     │
+  │ Key associations to look for:                                       │
+  │   species vs vitamin_d       (deficiency common in ASD)             │
+  │   species vs homocysteine    (elevated in ASD, folate metabolism)   │
+  │   species vs calprotectin    (gut inflammation marker)              │
+  │   species vs lactoferrin     (gut inflammation marker)              │
+  │   species vs asd_severity    (direct clinical correlation)          │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ 14. VISUALIZATION                                                   │
+  │                                                                     │
+  │ Container: bio-r-metagenomics:1.0.0 (custom build)                  │
+  │                                                                     │
+  │ INPUTS:                                                             │
+  │   - sample_id          (string)    Sample name                      │
+  │   - bracken_abundance  (file)      Bracken species TSV from step 5  │
+  │   - metadata           (file)      Sample metadata CSV              │
+  │   - diversity_results  (dir)       Diversity output from step 9     │
+  │   - maaslin2_results   (dir)       MaAsLin2 output from step 12    │
+  │                                                                     │
+  │ OUTPUTS:                                                            │
+  │   - figures            (dir)       {sample}_figures/                │
+  │     Contains:                                                       │
+  │       taxonomy_barplot.pdf         Stacked bars: top species        │
+  │       abundance_distribution.pdf   Histogram of species abundances  │
+  │       rank_abundance_curve.pdf     Dominance/evenness curve         │
+  │       alpha_diversity_summary.csv  Summary of diversity metrics     │
+  │                                                                     │
+  │     With multi-sample cohort (future):                              │
+  │       pcoa_ordination.pdf          PCoA colored by ASD/neurotypical │
+  │       species_heatmap.pdf          ComplexHeatmap with annotations  │
+  │       volcano_plot.pdf             ANCOM-BC differential abundance  │
+  │       biomarker_scatter_plots/     MaAsLin2 top associations        │
+  │                                                                     │
+  │ Saved to: results/08_visualization/                                 │
+  └──────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SUMMARY: WHICH MODULES RUN IN EACH VARIANT
+================================================================================
+
+  Module                     Variant 1    Variant 2    Variant 3
+                             Tax-only     Tax+Func     Full
+  ──────────────────────────────────────────────────────────────
+  1.  NANOPLOT_QC              ✓            ✓            ✓
+  2.  CHOPPER_FILTER           ✓            ✓            ✓
+  3.  MINIMAP2_HOST_REMOVAL    ✓            ✓            ✓
+  4.  KRAKEN2_CLASSIFY         ✓            ✓            ✓
+  5.  BRACKEN_ABUNDANCE        ✓            ✓            ✓
+  6.  KRONA_PLOT               ✓            ✓            ✓
+  7.  PRODIGAL_PREDICT                      ✓            ✓
+  8.  EGGNOG_ANNOTATE                       ✓            ✓
+  9.  EGGNOG_TO_PATHWAY_MATRIX [Fix #4]     ✓            ✓
+  10. DIVERSITY_ANALYSIS                                 ✓
+  11. LEFSE_TAXA                                         ✓
+  12. LEFSE_PATHWAYS                                     ✓
+  13. MAASLIN2_ANALYSIS                                  ✓
+  14. VISUALIZATION                                      ✓
+  ──────────────────────────────────────────────────────────────
+  Total processes:             6            9            14
+
+  Required databases:
+  ──────────────────────────────────────────────────────────────
+  GRCh38 (host removal)       ✓            ✓            ✓
+  Kraken2 + Bracken DB        ✓            ✓            ✓
+  eggNOG DB (~45 GB)                       ✓            ✓
+  ──────────────────────────────────────────────────────────────
+
+  Required inputs:
+  ──────────────────────────────────────────────────────────────
+  FASTQ.gz file               ✓            ✓            ✓
+  metadata.csv                                          ✓
+  ──────────────────────────────────────────────────────────────
+
+
+================================================================================
+END
+================================================================================
