@@ -14,6 +14,7 @@ include { MINIMAP2_HOST_REMOVAL }  from './modules/host_removal'
 include { KRAKEN2_CLASSIFY }       from './modules/kraken2_classify'
 include { BRACKEN_ABUNDANCE }      from './modules/bracken_abundance'
 include { KRONA_PLOT }             from './modules/krona_visualization'
+include { FASTQ_TO_FASTA }         from './modules/prodigal_genepred'
 include { PRODIGAL_PREDICT }       from './modules/prodigal_genepred'
 include { EGGNOG_ANNOTATE }        from './modules/eggnog_mapper'
 include { EGGNOG_TO_PATHWAY_MATRIX } from './modules/eggnog_pathway_convert'
@@ -121,7 +122,8 @@ workflow {
 
     // ── PHASE 5: Functional profiling ─────────────────────────────────
     if (!params.skip_functional) {
-        PRODIGAL_PREDICT(sample_id, ch_clean)
+        FASTQ_TO_FASTA(sample_id, ch_clean)
+        PRODIGAL_PREDICT(sample_id, FASTQ_TO_FASTA.out.fasta)
 
         ch_eggnog_db = Channel.fromPath(params.eggnog_db, checkIfExists: true)
         EGGNOG_ANNOTATE(
