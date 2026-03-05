@@ -16,7 +16,7 @@ process PRODIGAL_PREDICT {
     script:
     """
     # Convert FASTQ to FASTA (Prodigal requires FASTA input)
-    sed -n '1~4s/^@/>/p;2~4p' ${fastq} > ${sample_id}_input.fasta
+    awk 'NR%4==1{sub(/^@/,">"); print} NR%4==2{print}' ${fastq} > ${sample_id}_input.fasta
 
     prodigal \\
         -i ${sample_id}_input.fasta \\
