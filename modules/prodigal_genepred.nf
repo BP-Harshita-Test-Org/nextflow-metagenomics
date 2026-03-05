@@ -1,7 +1,7 @@
 process PRODIGAL_PREDICT {
     tag "${sample_id}"
     label 'process_medium'
-    container 'biocontainers/prodigal:v2.6.3-1-deb_cv1'
+    container 'nanozoo/prodigal:2.6.3--2769024'
     publishDir "${params.outdir}/04_functional/prodigal", mode: 'copy'
 
     input:
@@ -15,8 +15,11 @@ process PRODIGAL_PREDICT {
 
     script:
     """
+    # Convert FASTQ to FASTA (Prodigal requires FASTA input)
+    sed -n '1~4s/^@/>/p;2~4p' ${fastq} > ${sample_id}_input.fasta
+
     prodigal \\
-        -i ${fastq} \\
+        -i ${sample_id}_input.fasta \\
         -a ${sample_id}_proteins.faa \\
         -o ${sample_id}_genes.gff \\
         -d ${sample_id}_genes.fna \\
