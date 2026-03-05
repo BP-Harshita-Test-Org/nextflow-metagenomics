@@ -1,7 +1,7 @@
 process MINIMAP2_HOST_REMOVAL {
     tag "${sample_id}"
     label 'process_high'
-    container 'niema/minimap2_samtools:latest'
+    container 'nanozoo/minimap2:2.28--9e3bd01'
     publishDir "${params.outdir}/02_host_removal", mode: 'copy', pattern: '*_host_stats.txt'
 
     input:
