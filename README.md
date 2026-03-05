@@ -19,7 +19,7 @@ nextflow-codebase/
 │   ├── kraken2_classify.nf          # Kraken2 taxonomic classification
 │   ├── bracken_abundance.nf         # Bracken species abundance
 │   ├── krona_visualization.nf       # Krona interactive taxonomy plot
-│   ├── prodigal_genepred.nf         # Prodigal gene prediction
+│   ├── prodigal_genepred.nf         # seqtk FASTQ→FASTA + Pyrodigal gene prediction
 │   ├── eggnog_mapper.nf             # eggNOG-mapper functional annotation
 │   ├── diversity_analysis.nf        # Alpha/beta diversity + ANCOM-BC
 │   ├── lefse_enrichment.nf          # LEfSe differential enrichment
@@ -87,10 +87,17 @@ gunzip GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
 mv GCA_000001405.15_GRCh38_no_alt_analysis_set.fna GRCh38.fa
 cd ../..
 
-# ── eggNOG database (~45 GB, only if running functional profiling) ──
+# ── eggNOG database (~11 GB, only if running functional profiling) ──
+# NOTE: The official download_eggnog_data.py script is broken (EMBL server
+# moved the database). Use direct wget from the working domain instead.
 mkdir -p databases/eggnog
 cd databases/eggnog
-download_eggnog_data.py --data_dir .
+wget http://eggnog5.embl.de/download/emapperdb-5.0.2/eggnog.db.gz
+wget http://eggnog5.embl.de/download/emapperdb-5.0.2/eggnog_proteins.dmnd.gz
+wget http://eggnog5.embl.de/download/emapperdb-5.0.2/eggnog.taxa.tar.gz
+gunzip eggnog.db.gz
+gunzip eggnog_proteins.dmnd.gz
+tar xzf eggnog.taxa.tar.gz && rm eggnog.taxa.tar.gz
 cd ../..
 ```
 
@@ -177,7 +184,7 @@ nextflow run main.nf -resume [same params as before]
 | `--bracken_read_length` | 1500 | Bracken average read length |
 | `--bracken_level` | `S` | Bracken level: S(pecies), G(enus), F(amily) |
 | `--bracken_threshold` | 10 | Minimum reads for Bracken inclusion |
-| `--skip_functional` | false | Skip Prodigal + eggNOG-mapper |
+| `--skip_functional` | false | Skip Pyrodigal + eggNOG-mapper |
 | `--eggnog_db` | null | eggNOG database directory |
 | `--skip_diversity` | false | Skip diversity analysis |
 | `--fdr_alpha` | 0.05 | FDR cutoff for diversity tests |
@@ -202,7 +209,7 @@ results/
 │   ├── bracken/               # Bracken species-level abundance tables
 │   └── krona/                 # Interactive Krona HTML taxonomy plot
 ├── 04_functional/
-│   ├── prodigal/              # Predicted proteins and genes
+│   ├── prodigal/              # Pyrodigal predicted proteins and genes
 │   └── eggnog/                # KEGG, COG, GO annotations
 ├── 05_diversity/              # Alpha/beta diversity, ANCOM-BC results
 ├── 06_lefse/                  # LEfSe differential enrichment results
@@ -220,13 +227,14 @@ results/
 |---|---|---|---|
 | Dorado | `ontresearch/dorado:latest` | Docker Hub | No |
 | NanoPlot | `staphb/nanoplot:latest` | Docker Hub | No |
-| Chopper | `quay.io/biocontainers/chopper:0.9.0` | BioContainers | No |
-| Minimap2 + samtools | `staphb/minimap2:latest` | Docker Hub | No |
+| Chopper | `quay.io/biocontainers/chopper:0.9.0--hdcf5f25_0` | BioContainers | No |
+| Minimap2 + samtools | `nanozoo/minimap2:2.28--9e3bd01` | Docker Hub | No |
 | Kraken2 | `staphb/kraken2:latest` | Docker Hub | No |
 | Bracken | `staphb/bracken:latest` | Docker Hub | No |
-| Krona | `nanozoo/krona:2.7.1` | Docker Hub | No |
-| Prodigal | `biocontainers/prodigal:v2.6.3` | BioContainers | No |
-| eggNOG-mapper | `nanozoo/eggnog-mapper:2.1.12` | Docker Hub | No |
+| Krona | `nanozoo/krona:2.7.1--e7615f7` | Docker Hub | No |
+| seqtk (FASTQ→FASTA) | `nanozoo/seqtk:1.3--dc0d16b` | Docker Hub | No |
+| Pyrodigal | `quay.io/biocontainers/pyrodigal:3.7.0--py312h247cb63_1` | BioContainers | No |
+| eggNOG-mapper | `nanozoo/eggnog-mapper:2.1.13--c16a7d2` | Docker Hub | No |
 | LEfSe | `biobakery/lefse:latest` | Docker Hub | No |
 | R metagenomics | `bio-r-metagenomics:1.0.0` | Local build | **Yes** |
 
