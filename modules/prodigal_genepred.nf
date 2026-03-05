@@ -19,7 +19,7 @@ process FASTQ_TO_FASTA {
 process PRODIGAL_PREDICT {
     tag "${sample_id}"
     label 'process_medium'
-    container 'nanozoo/prodigal:2.6.3--2769024'
+    container 'quay.io/biocontainers/pyrodigal:3.7.0--py312h247cb63_1'
     publishDir "${params.outdir}/04_functional/prodigal", mode: 'copy'
 
     input:
@@ -33,12 +33,13 @@ process PRODIGAL_PREDICT {
 
     script:
     """
-    prodigal \\
+    pyrodigal \\
         -i ${fasta} \\
         -a ${sample_id}_proteins.faa \\
         -o ${sample_id}_genes.gff \\
         -d ${sample_id}_genes.fna \\
         -p meta \\
-        -f gff
+        -f gff \\
+        -j ${task.cpus}
     """
 }
