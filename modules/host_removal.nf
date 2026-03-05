@@ -1,7 +1,7 @@
 process MINIMAP2_HOST_REMOVAL {
     tag "${sample_id}"
     label 'process_high'
-    container 'staphb/minimap2:latest'
+    container 'niema/minimap2_samtools:latest'
     publishDir "${params.outdir}/02_host_removal", mode: 'copy', pattern: '*_host_stats.txt'
 
     input:
@@ -36,6 +36,6 @@ process MINIMAP2_HOST_REMOVAL {
     echo "total_reads: \${TOTAL}" > ${sample_id}_host_stats.txt
     echo "host_reads: \${HOST}" >> ${sample_id}_host_stats.txt
     echo "nonhost_reads: \${NONHOST}" >> ${sample_id}_host_stats.txt
-    echo "host_fraction: \$(echo "scale=4; \${HOST}/\${TOTAL}" | bc)" >> ${sample_id}_host_stats.txt
+    echo "host_fraction: \$(awk "BEGIN {printf \\"%.4f\\", \${HOST}/\${TOTAL}}")" >> ${sample_id}_host_stats.txt
     """
 }
