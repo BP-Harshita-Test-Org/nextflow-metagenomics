@@ -13,10 +13,12 @@ process KRONA_PLOT {
 
     script:
     """
-    /opt/conda/opt/krona/updateTaxonomy.sh
-    /opt/conda/opt/krona/scripts/ImportTaxonomy.pl \\
-        -o ${sample_id}_krona.html \\
-        -t 5 -m 3 \\
+    mkdir -p taxonomy
+    /opt/conda/opt/krona/updateTaxonomy.sh taxonomy
+    /opt/conda/opt/krona/scripts/ImportTaxonomy.pl \
+        -o ${sample_id}_krona.html \
+        -tax taxonomy \
+        -t 5 -m 3 \
         -i ${kraken2_report}
     """
 }
