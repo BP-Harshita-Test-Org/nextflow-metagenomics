@@ -1,3 +1,21 @@
+process FASTQ_TO_FASTA {
+    tag "${sample_id}"
+    label 'process_low'
+    container 'nanozoo/seqtk:1.4--48b1546'
+
+    input:
+    val  sample_id
+    path fastq
+
+    output:
+    path "${sample_id}_input.fasta", emit: fasta
+
+    script:
+    """
+    seqtk seq -a ${fastq} > ${sample_id}_input.fasta
+    """
+}
+
 process PRODIGAL_PREDICT {
     tag "${sample_id}"
     label 'process_medium'
@@ -6,7 +24,7 @@ process PRODIGAL_PREDICT {
 
     input:
     val  sample_id
-    path fastq
+    path fasta
 
     output:
     path "${sample_id}_proteins.faa", emit: proteins
@@ -15,11 +33,8 @@ process PRODIGAL_PREDICT {
 
     script:
     """
-    # Convert FASTQ to FASTA (Prodigal requires FASTA input)
-    awk 'NR%4==1{sub(/^@/,">"); print} NR%4==2{print}' ${fastq} > ${sample_id}_input.fasta
-
     prodigal \\
-        -i ${sample_id}_input.fasta \\
+        -i ${fasta} \\
         -a ${sample_id}_proteins.faa \\
         -o ${sample_id}_genes.gff \\
         -d ${sample_id}_genes.fna \\
