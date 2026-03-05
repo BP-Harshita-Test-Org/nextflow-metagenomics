@@ -1,7 +1,7 @@
 process EGGNOG_ANNOTATE {
     tag "${sample_id}"
     label 'process_high'
-    container 'nanozoo/eggnog-mapper:2.1.12--4f2b6c0'
+    container 'nanozoo/eggnog-mapper:2.1.13--c16a7d2'
     publishDir "${params.outdir}/04_functional/eggnog", mode: 'copy'
 
     input:
