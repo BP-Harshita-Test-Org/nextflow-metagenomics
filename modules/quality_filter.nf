@@ -1,7 +1,7 @@
 process CHOPPER_FILTER {
     tag "${sample_id}"
     label 'process_medium'
-    container 'quay.io/biocontainers/chopper:0.9.0--hdfd78af_0'
+    container 'quay.io/biocontainers/chopper:0.9.0--hdcf5f25_0'
 
     input:
     val  sample_id
