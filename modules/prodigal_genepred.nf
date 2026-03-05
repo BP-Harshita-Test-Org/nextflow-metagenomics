@@ -1,7 +1,7 @@
 process FASTQ_TO_FASTA {
     tag "${sample_id}"
     label 'process_low'
-    container 'nanozoo/seqtk:1.4--48b1546'
+    container 'nanozoo/seqtk:1.3--dc0d16b'
 
     input:
     val  sample_id
