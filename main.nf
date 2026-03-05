@@ -166,8 +166,8 @@ workflow {
         ch_metadata_viz = Channel.fromPath(params.metadata, checkIfExists: true)
 
         // Collect results from upstream steps (use dummy if skipped)
-        def div_results  = (!params.skip_diversity)  ? ch_diversity  : Channel.fromPath("${projectDir}/assets/PLACEHOLDER")
-        def maa_results  = (!params.skip_maaslin2)   ? ch_maaslin2   : Channel.fromPath("${projectDir}/assets/PLACEHOLDER")
+        div_results  = (!params.skip_diversity  && params.metadata) ? ch_diversity  : Channel.fromPath("${projectDir}/assets/PLACEHOLDER")
+        maa_results  = (!params.skip_maaslin2   && params.metadata) ? ch_maaslin2   : Channel.fromPath("${projectDir}/assets/PLACEHOLDER")
 
         VISUALIZATION(
             sample_id,
