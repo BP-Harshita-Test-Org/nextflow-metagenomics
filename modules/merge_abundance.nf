@@ -1,6 +1,6 @@
 process MERGE_ABUNDANCE {
     label 'process_low'
-    container 'python:3.11-slim'
+    container 'python:3.11'
     publishDir "${params.outdir}/05_merged", mode: 'copy'
 
     input:
