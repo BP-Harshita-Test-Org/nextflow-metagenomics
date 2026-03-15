@@ -5,12 +5,11 @@ process EGGNOG_ANNOTATE {
     publishDir "${params.outdir}/04_functional/eggnog", mode: 'copy'
 
     input:
-    val  sample_id
-    path proteins
+    tuple val(sample_id), path(proteins)
     path eggnog_db
 
     output:
-    path "${sample_id}_eggnog.emapper.annotations", emit: annotations
+    tuple val(sample_id), path("${sample_id}_eggnog.emapper.annotations"), emit: annotations
     path "${sample_id}_eggnog.emapper.seed_orthologs", emit: orthologs
 
     script:

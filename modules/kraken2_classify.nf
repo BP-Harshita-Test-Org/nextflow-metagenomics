@@ -5,13 +5,12 @@ process KRAKEN2_CLASSIFY {
     publishDir "${params.outdir}/03_taxonomy/kraken2", mode: 'copy'
 
     input:
-    val  sample_id
-    path fastq
+    tuple val(sample_id), path(fastq)
     path kraken2_db
 
     output:
     path "${sample_id}_kraken2_output.txt", emit: output
-    path "${sample_id}_kraken2_report.txt", emit: report
+    tuple val(sample_id), path("${sample_id}_kraken2_report.txt"), emit: report
 
     script:
     """

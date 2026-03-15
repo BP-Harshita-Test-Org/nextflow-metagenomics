@@ -5,8 +5,7 @@ process KRONA_PLOT {
     publishDir "${params.outdir}/03_taxonomy/krona", mode: 'copy'
 
     input:
-    val  sample_id
-    path kraken2_report
+    tuple val(sample_id), path(kraken2_report)
 
     output:
     path "${sample_id}_krona.html", emit: html
@@ -15,10 +14,10 @@ process KRONA_PLOT {
     """
     mkdir -p taxonomy
     /opt/conda/opt/krona/updateTaxonomy.sh taxonomy
-    /opt/conda/opt/krona/scripts/ImportTaxonomy.pl \
-        -o ${sample_id}_krona.html \
-        -tax taxonomy \
-        -t 5 -m 3 \
+    /opt/conda/opt/krona/scripts/ImportTaxonomy.pl \\
+        -o ${sample_id}_krona.html \\
+        -tax taxonomy \\
+        -t 5 -m 3 \\
         -i ${kraken2_report}
     """
 }

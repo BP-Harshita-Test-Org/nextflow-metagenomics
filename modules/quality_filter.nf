@@ -4,11 +4,10 @@ process CHOPPER_FILTER {
     container 'quay.io/biocontainers/chopper:0.9.0--hdcf5f25_0'
 
     input:
-    val  sample_id
-    path fastq
+    tuple val(sample_id), path(fastq)
 
     output:
-    path "${sample_id}_filtered.fastq", emit: fastq
+    tuple val(sample_id), path("${sample_id}_filtered.fastq"), emit: fastq
 
     script:
     """

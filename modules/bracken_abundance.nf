@@ -5,12 +5,11 @@ process BRACKEN_ABUNDANCE {
     publishDir "${params.outdir}/03_taxonomy/bracken", mode: 'copy'
 
     input:
-    val  sample_id
-    path kraken2_report
+    tuple val(sample_id), path(kraken2_report)
     path kraken2_db
 
     output:
-    path "${sample_id}_bracken_species.tsv", emit: abundance
+    tuple val(sample_id), path("${sample_id}_bracken_species.tsv"), emit: abundance
     path "${sample_id}_bracken_report.txt", emit: report
 
     script:

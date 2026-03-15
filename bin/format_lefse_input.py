@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Format Bracken/eggNOG abundance tables into LEfSe-compatible input."""
+"""Format merged abundance matrix + metadata into LEfSe-compatible input."""
 
 import argparse
 import csv
-import sys
 
 
 def main():
     parser = argparse.ArgumentParser(description="Format abundance data for LEfSe")
-    parser.add_argument("--abundance", required=True, help="Abundance table (TSV)")
+    parser.add_argument("--abundance", required=True, help="Merged abundance matrix TSV")
     parser.add_argument("--metadata", required=True, help="Sample metadata (CSV)")
     parser.add_argument("--output", required=True, help="Output LEfSe-formatted file")
     args = parser.parse_args()
@@ -22,33 +21,32 @@ def main():
             group = row.get("group", row.get("diagnosis", "unknown"))
             sample_groups[sid] = group
 
-    # Read abundance table
-    features = {}
-    with open(args.abundance, delimiter="\t") as f:
-        reader = csv.DictReader(f, delimiter="\t")
+    # Read merged abundance matrix (feature \t sample1 \t sample2 ...)
+    with open(args.abundance) as f:
+        reader = csv.reader(f, delimiter="\t")
+        header = next(reader)  # ["feature", "sample1", "sample2", ...]
+        sample_ids = header[1:]
+
+        features = {}
         for row in reader:
-            name = row.get("name", "")
-            abundance = row.get("fraction_total_reads", "0")
-            if name:
-                features[name] = abundance
+            feature_name = row[0]
+            abundances = row[1:]
+            features[feature_name] = abundances
 
-    # Write LEfSe format:
-    # Row 1: class labels (ASD / neurotypical)
-    # Row 2+: feature\tabundance_per_sample
+    # Write LEfSe format
     with open(args.output, "w") as f:
-        # For single-sample, write a simple two-column format
-        # For multi-sample, this would be expanded to columns per sample
-        if sample_groups:
-            samples = list(sample_groups.keys())
-            groups = [sample_groups[s] for s in samples]
-            f.write("class\t" + "\t".join(groups) + "\n")
-        else:
-            f.write("class\tsample\n")
+        # Row 1: class labels (ASD / neurotypical)
+        class_labels = [sample_groups.get(s, "unknown") for s in sample_ids]
+        f.write("class\t" + "\t".join(class_labels) + "\n")
 
-        for feature, abund in features.items():
-            f.write(f"{feature}\t{abund}\n")
+        # Row 2: subject IDs
+        f.write("subject\t" + "\t".join(sample_ids) + "\n")
 
-    print(f"LEfSe input written to {args.output} ({len(features)} features)")
+        # Feature rows
+        for feature, abundances in features.items():
+            f.write(f"{feature}\t" + "\t".join(abundances) + "\n")
+
+    print(f"LEfSe input written to {args.output} ({len(features)} features, {len(sample_ids)} samples)")
 
 
 if __name__ == "__main__":

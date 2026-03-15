@@ -5,12 +5,11 @@ process MINIMAP2_HOST_REMOVAL {
     publishDir "${params.outdir}/02_host_removal", mode: 'copy', pattern: '*_host_stats.txt'
 
     input:
-    val  sample_id
-    path fastq
+    tuple val(sample_id), path(fastq)
     path host_ref
 
     output:
-    path "${sample_id}_nonhost.fastq", emit: fastq
+    tuple val(sample_id), path("${sample_id}_nonhost.fastq"), emit: fastq
     path "${sample_id}_host_stats.txt", emit: stats
 
     script:

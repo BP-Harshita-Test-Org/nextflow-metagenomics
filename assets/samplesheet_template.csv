@@ -1,0 +1,5 @@
+sample_id,fastq
+ASD_01,/path/to/ASD_01.fastq
+ASD_02,/path/to/ASD_02.fastq
+NT_01,/path/to/NT_01.fastq
+NT_02,/path/to/NT_02.fastq

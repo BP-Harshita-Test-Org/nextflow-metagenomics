@@ -5,8 +5,7 @@ process NANOPLOT_QC {
     publishDir "${params.outdir}/01_qc/nanoplot", mode: 'copy'
 
     input:
-    val  sample_id
-    path fastq
+    tuple val(sample_id), path(fastq)
 
     output:
     path "${sample_id}_nanoplot/", emit: report_dir

@@ -18,6 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     && rm -rf /var/lib/apt/lists/*
 
+# Use Posit Package Manager for pre-compiled R binaries
+ENV CRAN_REPO="https://packagemanager.posit.co/cran/__linux__/jammy/latest"
+
 # Install CRAN packages
 RUN R -e "install.packages(c( \
     'optparse', \
@@ -28,15 +31,13 @@ RUN R -e "install.packages(c( \
     'pheatmap', \
     'reshape2', \
     'vegan' \
-), repos='https://cloud.r-project.org/')"
+), repos=Sys.getenv('CRAN_REPO'))"
 
-# Install Bioconductor packages
-RUN R -e "install.packages('BiocManager', repos='https://cloud.r-project.org/'); \
-    BiocManager::install(c( \
-    'phyloseq', \
-    'ANCOMBC', \
-    'Maaslin2', \
-    'ComplexHeatmap' \
-), ask=FALSE, update=FALSE)"
+# Install Bioconductor packages (split for better Docker caching)
+RUN R -e "install.packages('BiocManager', repos=Sys.getenv('CRAN_REPO'))"
+RUN R -e "BiocManager::install('phyloseq', ask=FALSE, update=FALSE)"
+RUN R -e "BiocManager::install('ANCOMBC', ask=FALSE, update=FALSE)"
+RUN R -e "BiocManager::install('Maaslin2', ask=FALSE, update=FALSE)"
+RUN R -e "BiocManager::install('ComplexHeatmap', ask=FALSE, update=FALSE)"
 
 WORKDIR /data
