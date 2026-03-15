@@ -20,8 +20,8 @@ process LEFSE_ANALYSIS {
         --metadata ${metadata} \\
         --output lefse_input.txt
 
-    # Run LEfSe
-    LEFSE_DIR=/home/linuxbrew/.linuxbrew/Cellar/lefse/1.0.0-dev-e3cabe9/bin
+    # Run LEfSe (scripts are in libexec/bin, run with python directly)
+    LEFSE_DIR=/home/linuxbrew/.linuxbrew/Cellar/lefse/1.0.0-dev-e3cabe9/libexec/bin
     python \$LEFSE_DIR/format_input.py lefse_input.txt lefse_formatted.in -c 1 -s 2 -u 3 -o 1000000
     python \$LEFSE_DIR/run_lefse.py lefse_formatted.in lefse_${analysis_type}_results.tsv -l ${params.lda_threshold}
     python \$LEFSE_DIR/plot_res.py lefse_${analysis_type}_results.tsv lefse_${analysis_type}_plot.pdf --format pdf || true
