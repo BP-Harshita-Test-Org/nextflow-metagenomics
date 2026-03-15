@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Format merged abundance matrix + metadata into LEfSe-compatible input."""
 
 import argparse
@@ -44,9 +44,9 @@ def main():
 
         # Feature rows
         for feature, abundances in features.items():
-            f.write(f"{feature}\t" + "\t".join(abundances) + "\n")
+            f.write(feature + "\t" + "\t".join(abundances) + "\n")
 
-    print(f"LEfSe input written to {args.output} ({len(features)} features, {len(sample_ids)} samples)")
+    print("LEfSe input written to %s (%d features, %d samples)" % (args.output, len(features), len(sample_ids)))
 
 
 if __name__ == "__main__":
